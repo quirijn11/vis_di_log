@@ -36,6 +36,22 @@ def convert_to_minutes(time_str):
     total_minutes = hours * 60 + minutes
     return total_minutes
 
+
+# Function to update "Van" and "Tot" based on conditions
+def update_van_tot(row):
+    if row['Rusttijd'] > 0:
+        row['Van'] = 'Rust'
+        row['Tot'] = ''
+    elif row['Vaaruren'] > 0:
+        row['Van'] = 'Varen'
+        row['Tot'] = ''
+    elif row['Wachttijd'] > 0:
+        row['Van'] = 'Wachten'
+        row['Tot'] = ''
+
+    return row
+
+
 class UploadSailReport():
 
     def __init__(self, file):
@@ -53,7 +69,6 @@ class UploadSailReport():
 
         # Step 2: Append "-2024" to the date (or use the current year)
         df['Date'] = df['Date'] + '-2024'
-        print(df)
         # Step 3: Combine the Date and Time columns
         df['Start'] = pd.to_datetime(df['Date'] + ' ' + df['Start'], format='%d-%m-%Y %H:%M')
         df['Einde'] = df.apply(adjust_datetime, axis=1)
@@ -67,7 +82,10 @@ class UploadSailReport():
         df = df.fillna('')
         df['Schip'] = self.barge
 
-        return self.barge, df
+        # Apply the function to each row
+        df = df.apply(update_van_tot, axis=1)
+
+        return df
 
 
 class VizualisationPlanning():

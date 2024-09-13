@@ -3,6 +3,7 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 import visualize
+import pandas as pd
 
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -21,8 +22,19 @@ if st.session_state["authentication_status"]:
     st.write(f'Welcome *{st.session_state["name"]}*')
     file = st.file_uploader("Upload Ship Report")
     if file:
-        barge, filtered_df = visualize.UploadSailReport(file).upload()
-        st.plotly_chart(visualize.VizualisationPlanning(filtered_df).calls_gantt_chart('2024-08-17'),
+        filtered_df = visualize.UploadSailReport(file).upload()
+        print(filtered_df)
+        min_date = filtered_df['Start'].iloc[0].date()
+        max_date = (filtered_df['Einde'].iloc[-1] - pd.DateOffset(days=7)).date()
+        selected_range = st.slider(
+            "Select the start date of the week to visualize:",
+            min_value=min_date,
+            max_value=max_date,
+            value=min_date,
+            format="DD-MM-YYYY"  # Optional: specify the format of the date
+        )
+
+        st.plotly_chart(visualize.VizualisationPlanning(filtered_df).calls_gantt_chart(selected_range),
                         use_container_width=True)
 elif not st.session_state["authentication_status"]:
     st.error('Username/password is incorrect')
