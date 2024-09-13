@@ -5,11 +5,17 @@ cookie:
 credentials:
   usernames:
     qschevenhoven:
-      email: quirijn.schevenhoven@confano.nl
+      email: quirijn.schevenhoven@cofano.nl
       failed_login_attempts: 0
       logged_in: false
       name: Quirijn Schevenhoven
-      password: $2b$12$Enkpf9J3nKLQAeNmHb7aa.qIeLY725uGAW2FIvYYAhWE1k8ftm0xu
+      password: $2b$12$PHbxjyLg4d5uvRzdshl.aOm2yi3aMMif0CthL0RluuC/v3HoE4c8S
+    flandheer:
+      email: frank.landheer@cofano.nl
+      failed_login_attempts: 0
+      logged_in: false
+      name: Frank Landheer
+      password: $2b$12$NNm3nzYcSlneicXP6YdukuUfWstUi2WpmJ4SqI7kO7im3E8HYuR9C
 preauthorized:
   emails:
   #- melsby@gmail.com
