@@ -52,7 +52,7 @@ def update_van_tot(row):
     return row
 
 
-class UploadSailReport():
+class UploadSailReport:
 
     def __init__(self, file):
         self.barge = None
@@ -88,7 +88,7 @@ class UploadSailReport():
         return df
 
 
-class VizualisationPlanning():
+class VizualizationPlanning:
 
     def __init__(self, df):
         self.df = df

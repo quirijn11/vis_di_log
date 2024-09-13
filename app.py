@@ -34,10 +34,9 @@ if st.session_state["authentication_status"]:
             format="DD-MM-YYYY"  # Optional: specify the format of the date
         )
 
-        st.plotly_chart(visualize.VizualisationPlanning(filtered_df).calls_gantt_chart(selected_range),
+        st.plotly_chart(visualize.VizualizationPlanning(filtered_df).calls_gantt_chart(selected_range),
                         use_container_width=True)
 elif not st.session_state["authentication_status"]:
     st.error('Username/password is incorrect')
 elif st.session_state["authentication_status"] is None:
     st.warning('Please enter your username and password')
-
