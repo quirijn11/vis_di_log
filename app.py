@@ -23,13 +23,12 @@ if st.session_state["authentication_status"]:
     files = st.file_uploader("Upload Ship Report", accept_multiple_files=True)
 
     generate_dashboard = st.button('Generate Dashboard')
-    if "generate_dashboard" not in st.session_state:
-            st.session_state['generate_dashboard'] = False
-    else:
+
+    if generate_dashboard:
         st.session_state['generate_dashboard'] = True
         st.session_state['files'] = True
 
-    if st.session_state.generate_dashboard and st.session_state.files:
+        if st.session_state.generate_dashboard and st.session_state.files:
             filtered_df = visualize.UploadMultipleSailReports(files).upload()
             st.session_state['filtered_df'] = filtered_df
             min_date = st.session_state.filtered_df['Start'].iloc[0].date()
