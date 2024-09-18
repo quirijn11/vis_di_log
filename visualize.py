@@ -1,3 +1,5 @@
+from cProfile import label
+
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -64,6 +66,9 @@ class UploadSailReport:
         df.columns = df.iloc[7]
         df = df.iloc[8:-2].reset_index(drop=True)
         # Step 1: Fill the empty values in the "Day" column with the last valid entry
+        if 'Niet-flexibel' not in df.columns:
+            df.rename(columns={'Dag': 'Niet-flexibel'}, inplace=True)
+
         df['Niet-flexibel'] = df['Niet-flexibel'].fillna(method='ffill')
         df['Date'] = df['Niet-flexibel'].str.extract(r'\((\d{1,2}-\d{1,2})\)')
 
@@ -77,6 +82,7 @@ class UploadSailReport:
             df[column] = df[column].apply(convert_to_minutes)
             df[column] = df[column].fillna(0)
 
+
         # Drop the specified columns
         df = df.drop(columns=['Niet-flexibel', 'Date', 'Opmerkingen'])
         df = df.fillna('')
@@ -87,11 +93,34 @@ class UploadSailReport:
 
         return df
 
+class UploadMultipleSailReports(UploadSailReport):
+    """
+    This class offers the opportunity to upload multiple sail reports and combine them into a single DataFrame.
 
-class VizualizationPlanning:
+    """
+
+    def __init__(self, files):
+        self.files = files
+        self.df = None
+
+    def upload(self):
+        dfs = []
+        for file in self.files:
+            df = UploadSailReport(file).upload()
+            dfs.append(df)
+
+        self.df = pd.concat(dfs)
+
+        return self.df
+
+
+class VisualisationPlanning:
 
     def __init__(self, df):
         self.df = df
+
+    import pandas as pd
+    import plotly.express as px
 
     def calls_gantt_chart(self, start_date):
         """
@@ -113,15 +142,90 @@ class VizualizationPlanning:
         # Filter DataFrame for the specific week
         filtered_df = self.df[(self.df['Start'] >= start_date) & (self.df['Einde'] <= end_date)]
 
-        # Create Gantt chart
-        fig = px.timeline(filtered_df, x_start='Start',
+        # Define a color map for the 'Van' categories
+        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown'}
+
+        filtered_df["Activiteit"] = filtered_df["Van"].apply(lambda x: x if x in color_map else "Terminal")
+
+        # Create Gantt chart with 'Van' column as color, and apply the color map
+        fig = px.timeline(filtered_df,
+                          x_start='Start',
                           x_end='Einde',
                           y='Schip',
-                          color='Van',
-                          title='Barge Schedule Gantt Chart')
+                          color='Activiteit',  # Use the 'Van' column for coloring
+                          text='Van',  # Display the 'Van' column inside the blocks
+                          title='Barge Schedule Gantt Chart',
+                          color_discrete_map=color_map)  # Apply consistent color mapping
+
+        # Ensure the y-axis is ordered by category
         fig.update_yaxes(categoryorder='total ascending')
 
+        # Update the layout for axis titles and hide the legend
         fig.update_layout(xaxis_title='Date',
-                          yaxis_title='Barge Name')
+                          yaxis_title='Barge Name',
+                          showlegend=True,  # You can hide the legend if needed
+                          legend_title='Activity')
+
+        # Center the text inside the Gantt chart blocks
+        fig.update_traces(textposition='inside')
 
         return fig
+
+    def activity_line_chart(self, start_date):
+        # Convert Start and Einde columns to datetime
+
+        # Convert start_date to datetime and calculate the end of the week (Friday)
+        start_date = pd.to_datetime(start_date)
+        end_date = start_date + pd.DateOffset(days=6)
+
+        # Filter DataFrame for the specific week
+        _filtered_df = self.df[(self.df['Start'] >= start_date) & (self.df['Einde'] <= end_date)]
+
+        # Extract day from Start time
+        _filtered_df['Dag'] = _filtered_df['Start'].dt.date
+
+        _filtered_df = _filtered_df[["Vaaruren", "Wachttijd", "Rusttijd", "Laad/Lostijd", "Schip", "Dag"]]
+        _filtered_df.rename(columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"}, inplace=True)
+
+        # Define a color map for the 'Van' categories
+        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown', 'Terminal': 'pink'}
+
+        # Group by ship, day, and activity, and calculate average time per activity per day
+        grouped_df = _filtered_df.groupby(['Schip', 'Dag'], as_index=False).mean()
+
+        # Create the line chart
+        fig = px.bar(grouped_df, x='Dag', y=['Varen', 'Wachten', 'Rust', 'Terminal'],
+                     title='Average Activity Time Per Ship Per Day',
+                     labels={'value': 'Average Time (minutes)', 'Day': 'Date'},
+                     color_discrete_map=color_map,
+                     facet_col='Schip') # Separate the chart by ship)
+
+        return fig
+
+    def activity_trend(self):
+        # Convert Start and Einde columns to datetime
+
+        _filtered_df = self.df.copy()
+        # Extract day from Start time
+        _filtered_df['Dag'] = _filtered_df['Start'].dt.date
+
+        # Reindex, set dag as index and sort by index
+        _filtered_df = _filtered_df.set_index('Dag').sort_index()
+        _filtered_df = _filtered_df[["Vaaruren", "Wachttijd", "Rusttijd", "Laad/Lostijd", "Schip"]]
+        _filtered_df.rename(columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"}, inplace=True)
+
+        # Define a color map for the 'Van' categories
+        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown', 'Terminal': 'pink'}
+
+        # create rolling of 7 days for each ship and activity and calculate the mean
+        _filtered_df = _filtered_df.groupby(['Schip']).rolling(window=7).mean().reset_index()
+
+
+        fig = px.line(_filtered_df, x='Dag', y=['Varen', 'Wachten', 'Rust', 'Terminal'],
+                     title='Average Activity Time Per Ship Per Day',
+                     labels={'value': 'Average Time (minutes)', 'Day': 'Date'},
+                     color_discrete_map=color_map,
+                      line_dash='Schip')
+
+        return fig
+

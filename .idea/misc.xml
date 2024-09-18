@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.12 (visualize_voyages)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (visualize_voyages)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.10 (vis_di_log)" project-jdk-type="Python SDK" />
 </project>
