@@ -104,7 +104,12 @@ class UploadMultipleSailReports(UploadSailReport):
         self.df = None
 
     def upload(self):
+
+        if not self.files:
+            return pd.DataFrame()
+
         dfs = []
+
         for file in self.files:
             df = UploadSailReport(file).upload()
             dfs.append(df)
