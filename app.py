@@ -5,6 +5,27 @@ from yaml.loader import SafeLoader
 import visualize
 import pandas as pd
 
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: white;
+        color: black;
+        text-align: center;
+        padding: 10px;
+    }
+    .footer img {
+        height: 50px;
+    }
+    </style>
+    <div class="footer">
+        <p>Powered by <img src="https://nederlandvacature.nl/werkgever/logo/37021/" alt="Logo"></p>
+    </div>
+    """, unsafe_allow_html=True)
+
 with open('config.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
 
@@ -20,14 +41,21 @@ name, authentication_status, username = authenticator.login()
 if st.session_state["authentication_status"]:
     authenticator.logout('Logout', 'main')
     st.write(f'Welcome *{st.session_state["name"]}*')
-    files = st.file_uploader("Upload Ship Report", accept_multiple_files=True)
-    generate_dashboard = st.button('Generate Dashboard')
 
-    if "generate_dashboard" not in st.session_state:
-            st.session_state['generate_dashboard'] = False
-    else:
-        st.session_state['generate_dashboard'] = True
-        st.session_state['files'] = True
+    # Header and description
+    st.title("Ship Activity Dashboard")
+    st.markdown("""
+       This dashboard provides an overview of ship activities based on the uploaded ship reports.
+       You can visualize the average time spent on various activities with a rolling window of 7 days.
+       """)
+
+    files = st.file_uploader("Upload one or more Ship Report(s)",
+                             accept_multiple_files=True,
+                             help="Upload Ship Report(s) in Excel format, extracted for Cofano BOS ship reports. "
+                                  "Able to upload multiple files.")
+
+    st.session_state['generate_dashboard'] = True
+    st.session_state['files'] = True
 
     if st.session_state.generate_dashboard and st.session_state.files:
         filtered_df = visualize.UploadMultipleSailReports(files).upload()
@@ -56,4 +84,7 @@ if st.session_state["authentication_status"]:
         st.error('Username/password is incorrect')
     elif st.session_state["authentication_status"] is None:
         st.warning('Please enter your username and password')
+
+# Footer with logo
+
 
