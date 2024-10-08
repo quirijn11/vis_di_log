@@ -1,57 +1,29 @@
-from cProfile import label
-
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-import re
+import utils
 
 
-def adjust_datetime(row):
-    # Ensure that the value is a string before applying regex
-    time_value = str(row['Einde']) if pd.notna(row['Einde']) else ''
-
-    # If the "Time" contains a date in parentheses, extract it and adjust the date
-    match = re.search(r'\((\d{1,2} \w{3})\)', time_value)
-    if match:
-        # Extract the next-day date (e.g., "01 Aug")
-        next_day_str = match.group(1)
-        next_day = pd.to_datetime(next_day_str + ' 2024', format='%d %b %Y')  # Assuming the year 2024
-        # Remove the "(01 Aug)" part from the Time column to extract the time
-        time_part = time_value.split(' ')[0]
-        return pd.to_datetime(next_day.strftime('%d-%m-%Y') + ' ' + time_part, format='%d-%m-%Y %H:%M')
+def write_week_info(start, start_of_week, end):
+    weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    if weekdays[start.weekday()] is not start_of_week:
+        st.write("The selected week is from: ", start, " to ", end, ". Note: this month did not start on a",
+                 start_of_week, ", therefore the first week of this month is not 7 days long.")
     else:
-        # If no next-day indication, combine the current row's date and time
-        return pd.to_datetime(row['Date'] + ' ' + time_value, format='%d-%m-%Y %H:%M')
+        st.write("The selected week is from: ", start, " to ", end, ".")
 
 
-def convert_to_minutes(time_str):
-    """ Convert time string in H:MM format to total minutes. """
-    if pd.isna(time_str):
-        return None
-
-    # Split the time string into hours and minutes
-    parts = time_str.split(':')
-    hours = int(parts[0])
-    minutes = int(parts[1])
-
-    # Calculate total minutes
-    total_minutes = hours * 60 + minutes
-    return total_minutes
-
-
-# Function to update "Van" and "Tot" based on conditions
-def update_van_tot(row):
-    if row['Rusttijd'] > 0:
-        row['Van'] = 'Rust'
-        row['Tot'] = ''
-    elif row['Vaaruren'] > 0:
-        row['Van'] = 'Varen'
-        row['Tot'] = ''
-    elif row['Wachttijd'] > 0:
-        row['Van'] = 'Wachten'
-        row['Tot'] = ''
-
-    return row
+def show_week_hours(df, ship, start, ship_config):
+    filtered_df = df[df['Schip'] == ship]
+    sailing_time = filtered_df[filtered_df['Start'] == start]['Vaaruren_week']
+    waiting_time = filtered_df[filtered_df['Start'] == start]['Wachttijd_week']
+    terminal_time = filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week']
+    contract_time = filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Sailing hours", round(sailing_time, 1))
+    col2.metric("Waiting hours", round(waiting_time, 1))
+    col3.metric("(Un)load hours", round(terminal_time, 1))
+    col4.metric("Total hours", round(contract_time, 1), round(contract_time - ship_config[ship], 1))
 
 
 class UploadSailReport:
@@ -59,6 +31,8 @@ class UploadSailReport:
     def __init__(self, file):
         self.barge = None
         self.file = file
+
+    # Function to calculate the sum until conditions are met
 
     def upload(self):
         df = pd.read_excel(self.file)
@@ -76,22 +50,34 @@ class UploadSailReport:
         df['Date'] = df['Date'] + '-2024'
         # Step 3: Combine the Date and Time columns
         df['Start'] = pd.to_datetime(df['Date'] + ' ' + df['Start'], format='%d-%m-%Y %H:%M')
-        df['Einde'] = df.apply(adjust_datetime, axis=1)
+        df['Einde'] = df.apply(utils.adjust_datetime, axis=1)
 
         for column in ['Vaaruren', 'Wachttijd', 'Rusttijd', 'Laad/Lostijd']:
-            df[column] = df[column].apply(convert_to_minutes)
+            df[column] = df[column].apply(utils.convert_to_minutes)
             df[column] = df[column].fillna(0)
-
 
         # Drop the specified columns
         df = df.drop(columns=['Niet-flexibel', 'Date', 'Opmerkingen'])
         df = df.fillna('')
+
         df['Schip'] = self.barge
 
+        df['Start_Date'] = df['Start'].dt.date
+        df['Einde_Date'] = df['Einde'].dt.date
+
+        df['Start_Weekday'] = df['Start'].dt.day_name()
+        df['Einde_Weekday'] = df['Einde'].dt.day_name()
+
+        # df = calculate_rolling_sums(df)
+
+        # df['Valt onder contracturen'] = (df['Vaaruren_rolling_sum'] + df['Wachttijd_rolling_sum']
+        #                                  + df['Laad/Lostijd_rolling_sum']) / 60
+
         # Apply the function to each row
-        df = df.apply(update_van_tot, axis=1)
+        df = df.apply(utils.update_van_tot, axis=1)
 
         return df
+
 
 class UploadMultipleSailReports(UploadSailReport):
     """
@@ -115,6 +101,7 @@ class UploadMultipleSailReports(UploadSailReport):
             dfs.append(df)
 
         self.df = pd.concat(dfs)
+        self.df = self.df.reset_index()
 
         return self.df
 
@@ -124,10 +111,7 @@ class VisualisationPlanning:
     def __init__(self, df):
         self.df = df
 
-    import pandas as pd
-    import plotly.express as px
-
-    def calls_gantt_chart(self, start_date):
+    def calls_gantt_chart(self, start_date, end_date, ship=None):
         """
         Description: This visualization shows the calls in a Gantt chart for a specific week.
         Purpose: Understand the calls and their duration within a given week.
@@ -136,19 +120,22 @@ class VisualisationPlanning:
         Title: Calls Gantt Chart
         X-axis: Time
         Y-axis: Calls
-        :param start_date: The Saturday of the week to filter data. Should be in 'YYYY-MM-DD' format.
+        :param start_date: The start date of the period shown in the chart.
+        :param end_date: The end date of the period shown in the chart.
+        :param ship: The ship corresponding to the data shown in the chart.
         :return: Calls Gantt chart in streamlit app
         """
 
         # Convert start_date to datetime and calculate the end of the week (Friday)
         start_date = pd.to_datetime(start_date)
-        end_date = start_date + pd.DateOffset(days=6)
 
         # Filter DataFrame for the specific week
         filtered_df = self.df[(self.df['Start'] >= start_date) & (self.df['Einde'] <= end_date)]
+        if ship is not None:
+            filtered_df = filtered_df[filtered_df['Schip'] == ship]
 
         # Define a color map for the 'Van' categories
-        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown'}
+        color_map = {'Varen': 'green', 'Wachten': 'blue', 'Rust': 'brown', 'Terminal': 'pink'}
 
         filtered_df["Activiteit"] = filtered_df["Van"].apply(lambda x: x if x in color_map else "Terminal")
 
@@ -159,15 +146,16 @@ class VisualisationPlanning:
                           y='Schip',
                           color='Activiteit',  # Use the 'Van' column for coloring
                           text='Van',  # Display the 'Van' column inside the blocks
-                          title='Barge Schedule Gantt Chart',
-                          color_discrete_map=color_map)  # Apply consistent color mapping
+                          title='Ship Timeline',
+                          color_discrete_map=color_map,  # Apply consistent color mapping
+                          category_orders={"Activiteit": ["Terminal", "Rust", "Varen", "Wachten"]})
 
         # Ensure the y-axis is ordered by category
         fig.update_yaxes(categoryorder='total ascending')
 
         # Update the layout for axis titles and hide the legend
         fig.update_layout(xaxis_title='Date',
-                          yaxis_title='Barge Name',
+                          yaxis_title='Ship Name',
                           showlegend=True,  # You can hide the legend if needed
                           legend_title='Activity')
 
@@ -184,26 +172,27 @@ class VisualisationPlanning:
         end_date = start_date + pd.DateOffset(days=6)
 
         # Filter DataFrame for the specific week
-        _filtered_df = self.df[(self.df['Start'] >= start_date) & (self.df['Einde'] <= end_date)]
-
-        # Extract day from Start time
-        _filtered_df['Dag'] = _filtered_df['Start'].dt.date
-
-        _filtered_df = _filtered_df[["Vaaruren", "Wachttijd", "Rusttijd", "Laad/Lostijd", "Schip", "Dag"]]
-        _filtered_df.rename(columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"}, inplace=True)
+        _filtered_df = self.df[
+            (self.df['Start_Date'] >= start_date.date()) & (self.df['Einde_Date'] <= end_date.date())
+            ]
+        _filtered_df = _filtered_df[["Vaaruren", "Wachttijd", "Rusttijd", "Laad/Lostijd", "Schip", "Start_Date"]]
+        _filtered_df.rename(
+            columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"},
+            inplace=True)
 
         # Define a color map for the 'Van' categories
-        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown', 'Terminal': 'pink'}
+        color_map = {'Varen': 'green', 'Wachten': 'blue', 'Rust': 'brown', 'Terminal': 'pink'}
 
         # Group by ship, day, and activity, and calculate average time per activity per day
-        grouped_df = _filtered_df.groupby(['Schip', 'Dag'], as_index=False).mean()
+        grouped_df = _filtered_df.groupby(['Schip', 'Start_Date'], as_index=False).sum()
 
         # Create the line chart
-        fig = px.bar(grouped_df, x='Dag', y=['Varen', 'Wachten', 'Rust', 'Terminal'],
-                     title='Average Activity Time Per Ship Per Day',
-                     labels={'value': 'Average Time (minutes)', 'Day': 'Date'},
+        fig = px.bar(grouped_df, x='Start_Date', y=['Varen', 'Wachten', 'Rust', 'Terminal'],
+                     title='Total Activity Time Per Ship Per Day',
+                     labels={'value': 'Time (minutes)', 'Day': 'Date'},
                      color_discrete_map=color_map,
-                     facet_col='Schip') # Separate the chart by ship)
+                     category_orders={"variable": ["Terminal", "Rust", "Varen", "Wachten"]},
+                     facet_col='Schip')  # Separate the chart by ship)
 
         return fig
 
@@ -217,20 +206,21 @@ class VisualisationPlanning:
         # Reindex, set dag as index and sort by index
         _filtered_df = _filtered_df.set_index('Dag').sort_index()
         _filtered_df = _filtered_df[["Vaaruren", "Wachttijd", "Rusttijd", "Laad/Lostijd", "Schip"]]
-        _filtered_df.rename(columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"}, inplace=True)
+        _filtered_df.rename(
+            columns={"Vaaruren": "Varen", "Wachttijd": "Wachten", "Rusttijd": "Rust", "Laad/Lostijd": "Terminal"},
+            inplace=True)
 
         # Define a color map for the 'Van' categories
-        color_map = {'Varen': 'green', 'Wachten': 'red', 'Rust': 'brown', 'Terminal': 'pink'}
+        color_map = {'Varen': 'green', 'Wachten': 'blue', 'Rust': 'brown', 'Terminal': 'pink'}
 
         # create rolling of 7 days for each ship and activity and calculate the mean
         _filtered_df = _filtered_df.groupby(['Schip']).rolling(window=7).mean().reset_index()
 
-
         fig = px.line(_filtered_df, x='Dag', y=['Varen', 'Wachten', 'Rust', 'Terminal'],
-                     title='Average Activity Time Per Ship Per Day',
-                     labels={'value': 'Average Time (minutes)', 'Day': 'Date'},
-                     color_discrete_map=color_map,
+                      title='Average Activity Time Per Ship Per Day',
+                      labels={'value': 'Average Time (minutes)', 'Day': 'Date'},
+                      color_discrete_map=color_map,
+                      category_orders={"variable": ["Terminal", "Rust", "Varen", "Wachten"]},
                       line_dash='Schip')
 
         return fig
-

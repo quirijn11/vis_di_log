@@ -3,7 +3,9 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 import visualize
-import pandas as pd
+import utils
+
+st.set_page_config(layout="wide")
 
 st.markdown("""
     <style>
@@ -53,6 +55,7 @@ if st.session_state["authentication_status"]:
                              accept_multiple_files=True,
                              help="Upload Ship Report(s) in Excel format, extracted for Cofano BOS ship reports. "
                                   "Able to upload multiple files.")
+    st.divider()
 
     st.session_state['generate_dashboard'] = True
     st.session_state['files'] = True
@@ -62,23 +65,91 @@ if st.session_state["authentication_status"]:
         if filtered_df.empty:
             st.stop()
         st.session_state['filtered_df'] = filtered_df
-        min_date = st.session_state.filtered_df['Start'].iloc[0].date()
-        max_date = (st.session_state.filtered_df['Einde'].iloc[-1] - pd.DateOffset(days=7)).date()
-        selected_range = st.slider(
-            "Select the start date of the week to visualize:",
-            min_value=min_date,
-            max_value=max_date,
-            value=min_date,
-            format="DD-MM-YYYY"  # Optional: specify the format of the date
-        )
-        st.plotly_chart(visualize.VisualisationPlanning(st.session_state.filtered_df).calls_gantt_chart(selected_range),
-                        use_container_width=True)
 
-        st.plotly_chart(visualize.VisualisationPlanning(st.session_state.filtered_df).activity_line_chart(selected_range),
-                        use_container_width=True)
+        col1, col2, col3 = st.columns(3)
 
-        st.plotly_chart(visualize.VisualisationPlanning(st.session_state.filtered_df).activity_trend())
+        with col1:
+            start_of_week = st.radio('Week starts on:',
+                                     ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                                     index=5)
 
+        with col2:
+            ship_config = utils.assign_default_value_as_contract_hours(filtered_df)
+            edited_ship_config = st.data_editor(ship_config, hide_index=True)
+            dict_ship_config = edited_ship_config.set_index('Schip')['Contracturen'].to_dict()
+
+        with col3:
+            f = st.radio('Only show weeks where ship does not satisfy contract hours:', ['Yes', 'No'], index=1)
+            filter_boolean = False
+            if f == 'Yes':
+                filter_boolean = True
+
+        if not filter_boolean:
+            filtered_df_selected_start_day = st.session_state.filtered_df[
+                st.session_state.filtered_df['Start_Weekday'] == start_of_week]
+            start_of_weeks = sorted(filtered_df_selected_start_day['Start_Date'].unique().tolist())
+            start_of_weeks_with_weekday = {}
+            for item in start_of_weeks:
+                start_of_weeks_with_weekday[start_of_week + " " + str(item)] = item
+            min_date = list(start_of_weeks_with_weekday.keys())[0]
+            start = st.select_slider(
+                "Select the start date of the week to visualize:",
+                options=start_of_weeks_with_weekday,
+                value=min_date  # Optional: specify the format of the date
+            )
+            start = start_of_weeks_with_weekday[start]
+
+            filtered_df = utils.split_dataframe_into_weeks(filtered_df, start_of_week)
+            filtered_df = utils.split_rows_on_day_change(filtered_df)
+
+            start_end, options_as_dates = utils.get_required_rows(dict_ship_config, filtered_df, filter_boolean)
+            start = options_as_dates[start]
+            end = start_end[start][0]
+            visualize.write_week_info(start, start_of_week, end)
+
+            for ship in dict_ship_config:
+                visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+
+            tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
+            with tab1:
+                st.plotly_chart(
+                    visualize.VisualisationPlanning(filtered_df).calls_gantt_chart(start, end),
+                    use_container_width=True)
+            with tab2:
+                st.plotly_chart(
+                    visualize.VisualisationPlanning(filtered_df).activity_line_chart(start),
+                    use_container_width=True)
+            with tab3:
+                st.plotly_chart(visualize.VisualisationPlanning(filtered_df).activity_trend())
+        else:
+            filtered_df = utils.split_dataframe_into_weeks(filtered_df, start_of_week)
+            filtered_df = utils.split_rows_on_day_change(filtered_df)
+
+            start_end, options_as_dates = utils.get_required_rows(dict_ship_config, filtered_df, filter_boolean)
+
+            st.divider()
+            start = st.selectbox(
+                "Select week to visualize:",
+                options=sorted(list(options_as_dates.keys()))  # Optional: specify the format of the date
+            )
+            start = options_as_dates[start]
+            end = start_end[start][0]
+            ship = start_end[start][1]
+            st.divider()
+            st.write("The selected week is for ship", ship, "and is from", start, "to", end)
+            visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+            tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
+            with tab1:
+                st.plotly_chart(
+                    visualize.VisualisationPlanning(st.session_state.filtered_df).calls_gantt_chart(start, end, ship),
+                    use_container_width=True)
+            with tab2:
+                st.plotly_chart(
+                    visualize.VisualisationPlanning(filtered_df).activity_line_chart(start),
+                    use_container_width=True)
+            with tab3:
+                st.plotly_chart(visualize.VisualisationPlanning(filtered_df).activity_trend())
+            st.divider()
 
     elif not st.session_state["authentication_status"]:
         st.error('Username/password is incorrect')
@@ -86,5 +157,3 @@ if st.session_state["authentication_status"]:
         st.warning('Please enter your username and password')
 
 # Footer with logo
-
-
