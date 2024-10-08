@@ -130,7 +130,7 @@ class VisualisationPlanning:
         start_date = pd.to_datetime(start_date)
 
         # Filter DataFrame for the specific week
-        filtered_df = self.df[(self.df['Start'] >= start_date) & (self.df['Einde'] <= end_date)]
+        filtered_df = self.df[(self.df['Start_Date'] >= start_date.date()) & (self.df['Einde_Date'] <= end_date.date())]
         if ship is not None:
             filtered_df = filtered_df[filtered_df['Schip'] == ship]
 
