@@ -114,8 +114,15 @@ def get_required_rows(ship_config, df, filter_boolean):
                                      filtered_df_ship.loc[last_indices]]).sort_index()
         first_last_rows = first_last_rows.reset_index()
 
-        for i in range(0, len(first_last_rows) - 1, 2):
-            start_end[first_last_rows.loc[i, 'Start']] = [first_last_rows.loc[i + 1, 'Einde'], ship]
+        if filter_boolean:
+            for i in range(0, len(first_last_rows) - 1, 2):
+                if first_last_rows.loc[i, 'Start'] in start_end:
+                    start_end[first_last_rows.loc[i, 'Start']].append({'End': first_last_rows.loc[i + 1, 'Einde'], 'Ship': ship})
+                else:
+                    start_end[first_last_rows.loc[i, 'Start']] = [{'End': first_last_rows.loc[i + 1, 'Einde'], 'Ship': ship}]
+        else:
+            for i in range(0, len(first_last_rows) - 1, 2):
+                start_end[first_last_rows.loc[i, 'Start']] = [first_last_rows.loc[i + 1, 'Einde'], ship]
 
     sorted_options = sorted(list(start_end.keys()))
     options_as_dates = {}

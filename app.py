@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
@@ -98,7 +100,7 @@ if st.session_state["authentication_status"]:
             start_of_weeks = sorted(filtered_df_selected_start_day['Start_Date'].unique().tolist())
             start_of_weeks_with_weekday = {}
             for item in start_of_weeks:
-                start_of_weeks_with_weekday[start_of_week + " " + str(item)] = item
+                start_of_weeks_with_weekday[start_of_week + " " + str(item.strftime('%d-%m-%Y'))] = item
             min_date = list(start_of_weeks_with_weekday.keys())[0]
 
             st.header("Visualize Ship Report(s)")
@@ -115,8 +117,11 @@ if st.session_state["authentication_status"]:
             end = start_end[start][0]
             visualize.write_week_info(start, start_of_week, end)
 
-            for ship in dict_ship_config:
-                visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+            if len(dict_ship_config) <= 1:
+                for ship in dict_ship_config:
+                    visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+            else:
+                visualize.show_week_hours_as_df(filtered_df, start, dict_ship_config)
 
             tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
             with tab1:
@@ -131,16 +136,32 @@ if st.session_state["authentication_status"]:
                 st.plotly_chart(visualize.VisualisationPlanning(filtered_df).activity_trend())
         else:
             start_end, options_as_dates = utils.get_required_rows(dict_ship_config, filtered_df, filter_boolean)
+            start_of_weeks = sorted(filtered_df['Start_Date'].unique().tolist())
+            start_of_weeks_with_weekday = {}
+            for item in start_end:
+                if item.strftime('%A') == start_of_week and item.date() in options_as_dates:
+                    for el in start_end[item]:
+                        ship = el['Ship']
+                        start_of_weeks_with_weekday[start_of_week + " " + str(item.date().strftime('%d-%m-%Y')) + " - " + ship] = item.date()
 
             st.header("Visualize Ship Report(s)")
-            start = st.selectbox(
+            selection = st.selectbox(
                 "Select week to visualize:",
-                options=sorted(list(options_as_dates.keys()))  # Optional: specify the format of the date
+                options=start_of_weeks_with_weekday  # Optional: specify the format of the date
             )
-            start = options_as_dates[start]
-            end = start_end[start][0]
-            ship = start_end[start][1]
-            st.write("The selected week is for ship", ship, "and is from", start, "to", end)
+
+            converted_selection = start_of_weeks_with_weekday[selection]
+            start = options_as_dates[converted_selection]
+            ship = selection.split(' - ', 1)[1]
+            end = None
+            for item in start_end:
+                if item == start:
+                    for el in start_end[item]:
+                        if el['Ship'] == ship:
+                            end = el['End']
+            end_next_day = (end + timedelta(seconds=1)).date()
+
+            st.write("The selected week is for ship", ship, "and is from", str(start.date().strftime('%d-%m-%Y')), " to ", str(end_next_day.strftime('%d-%m-%Y')), ".")
             visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
             tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
             with tab1:
