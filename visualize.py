@@ -2,28 +2,88 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 import utils
-
+from datetime import timedelta
 
 def write_week_info(start, start_of_week, end):
     weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    end_next_day = (end + timedelta(seconds=1)).date()
     if weekdays[start.weekday()] is not start_of_week:
-        st.write("The selected week is from: ", start, " to ", end, ". Note: this month did not start on a",
+        st.write("The selected week is from: ", str(start.date().strftime('%d-%m-%Y')), " to ",
+                 str(end_next_day.strftime('%d-%m-%Y')), ". Note: this month did not start on a",
                  start_of_week, ", therefore the first week of this month is not 7 days long.")
     else:
-        st.write("The selected week is from: ", start, " to ", end, ".")
+        st.write("The selected week is from: ", str(start.date().strftime('%d-%m-%Y')), " to ",
+                 str(end_next_day.strftime('%d-%m-%Y')), ".")
 
 
 def show_week_hours(df, ship, start, ship_config):
     filtered_df = df[df['Schip'] == ship]
-    sailing_time = filtered_df[filtered_df['Start'] == start]['Vaaruren_week']
-    waiting_time = filtered_df[filtered_df['Start'] == start]['Wachttijd_week']
-    terminal_time = filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week']
-    contract_time = filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0]
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Sailing hours", round(sailing_time, 1))
-    col2.metric("Waiting hours", round(waiting_time, 1))
-    col3.metric("(Un)load hours", round(terminal_time, 1))
-    col4.metric("Total hours", round(contract_time, 1), round(contract_time - ship_config[ship], 1))
+    sailing_time = round(filtered_df[filtered_df['Start'] == start]['Vaaruren_week'], 1)
+    waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
+    terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
+    contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+    container = st.container(border=True)
+    if len(ship_config) > 1:
+        col1, col2, col3, col4, col5 = container.columns(5)
+        col1.markdown(f"""
+            <div style="display: flex; justify-content: center; align-items: center; height: 85px;">
+                <div>
+                    <strong>{ship}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        col2.metric("Sailing hours", sailing_time)
+        col3.metric("Waiting hours", waiting_time)
+        col4.metric("(Un)load hours", terminal_time)
+        col5.metric("Total hours", contract_time, round(contract_time - ship_config[ship], 1))
+    else:
+        col1, col2, col3, col4 = container.columns(4)
+        col1.metric("Sailing hours", sailing_time)
+        col2.metric("Waiting hours", waiting_time)
+        col3.metric("(Un)load hours", terminal_time)
+        col4.metric("Total hours", contract_time, round(contract_time - ship_config[ship], 1))
+
+
+def show_week_hours_as_df(df, start, ship_config):
+    columns = ['Ship', 'Sailing hours', 'Waiting hours', '(Un)load hours', 'Total hours']
+    df_to_show = pd.DataFrame(columns=columns)
+    for ship in ship_config:
+        filtered_df = df[df['Schip'] == ship]
+        sailing_time = round(filtered_df[filtered_df['Start'] == start]['Vaaruren_week'], 1)
+        waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
+        terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
+        contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+        new_row = {'Ship': ship, 'Sailing hours': sailing_time, 'Waiting hours': waiting_time,
+                   '(Un)load hours': terminal_time, 'Total hours': contract_time}
+        entry = pd.DataFrame.from_dict(new_row)
+        df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
+
+    # Set display format for floats
+    pd.options.display.float_format = '{:.1f}'.format  # Adjust the number of decimal places as needed
+
+    # Apply the style only to the 'Total hours' column based on the corresponding Threshold
+    styled_df = df_to_show.style.apply(lambda row: highlight_rows(row, ship_config, df_to_show.columns), axis=1)
+
+    # Display the styled DataFrame in Streamlit
+    st.dataframe(styled_df, width=1400)
+
+
+# Function to highlight Total hours based on the corresponding Threshold value
+def highlight_total_hours(total_hours, threshold):
+    return 'background-color: red' if total_hours < threshold else ''
+
+
+# Create a function to apply styles only to the "Total hours" column
+def highlight_rows(row, ship_config, columns):
+    styles = [''] * len(row)  # Create a list with the same length as the row, initialized with empty strings
+    total_hours = row['Total hours']
+    ship_name = row['Ship']
+
+    # Highlight only the 'Total hours' cell
+    total_hours_index = columns.get_loc('Total hours')
+    styles[total_hours_index] = highlight_total_hours(total_hours, ship_config[ship_name])
+
+    return styles
 
 
 class UploadSailReport:
