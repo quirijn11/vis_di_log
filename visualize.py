@@ -9,8 +9,8 @@ def write_week_info(start, start_of_week, end):
     end_next_day = (end + timedelta(seconds=1)).date()
     if weekdays[start.weekday()] is not start_of_week:
         st.write("The selected week is from: ", str(start.date().strftime('%d-%m-%Y')), " to ",
-                 str(end_next_day.strftime('%d-%m-%Y')), ". Note: this month did not start on a",
-                 start_of_week, ", therefore the first week of this month is not 7 days long.")
+                 str(end_next_day.strftime('%d-%m-%Y')), ". Note: this file did not start on a",
+                 start_of_week, ", therefore the first week of this file is not 7 days long.")
     else:
         st.write("The selected week is from: ", str(start.date().strftime('%d-%m-%Y')), " to ",
                  str(end_next_day.strftime('%d-%m-%Y')), ".")
@@ -49,14 +49,15 @@ def show_week_hours_as_df(df, start, ship_config):
     df_to_show = pd.DataFrame(columns=columns)
     for ship in ship_config:
         filtered_df = df[df['Schip'] == ship]
-        sailing_time = round(filtered_df[filtered_df['Start'] == start]['Vaaruren_week'], 1)
-        waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
-        terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
-        contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
-        new_row = {'Ship': ship, 'Sailing hours': sailing_time, 'Waiting hours': waiting_time,
-                   '(Un)load hours': terminal_time, 'Total hours': contract_time}
-        entry = pd.DataFrame.from_dict(new_row)
-        df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
+        if start.date() in filtered_df['Start_Date'].values:
+            sailing_time = round(filtered_df[filtered_df['Start'] == start]['Vaaruren_week'], 1)
+            waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
+            terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
+            contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+            new_row = {'Ship': ship, 'Sailing hours': sailing_time, 'Waiting hours': waiting_time,
+                       '(Un)load hours': terminal_time, 'Total hours': contract_time}
+            entry = pd.DataFrame.from_dict(new_row)
+            df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
 
     # Set display format for floats
     pd.options.display.float_format = '{:.1f}'.format  # Adjust the number of decimal places as needed

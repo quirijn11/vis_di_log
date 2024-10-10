@@ -6,6 +6,7 @@ import yaml
 from yaml.loader import SafeLoader
 import visualize
 import utils
+import pandas as pd
 
 st.set_page_config(layout="wide")
 
@@ -96,19 +97,21 @@ if st.session_state["authentication_status"]:
 
         if not filter_boolean:
             filtered_df_selected_start_day = filtered_df[filtered_df['Start_Weekday'] == start_of_week]
-
             start_of_weeks = sorted(filtered_df_selected_start_day['Start_Date'].unique().tolist())
             start_of_weeks_with_weekday = {}
             for item in start_of_weeks:
-                start_of_weeks_with_weekday[start_of_week + " " + str(item.strftime('%d-%m-%Y'))] = item
+                start_of_weeks_with_weekday[item.strftime('%A') + " " + str(item.strftime('%d-%m-%Y'))] = item
             min_date = list(start_of_weeks_with_weekday.keys())[0]
 
             st.header("Visualize Ship Report(s)")
-            selection = st.select_slider(
-                "Select the start date of the week to visualize:",
-                options=start_of_weeks_with_weekday,
-                value=min_date  # Optional: specify the format of the date
-            )
+            if len(start_of_weeks_with_weekday) > 1:
+                selection = st.select_slider(
+                    "Select the start date of the week to visualize:",
+                    options=start_of_weeks_with_weekday,
+                    value=min_date  # Optional: specify the format of the date
+                )
+            else:
+                selection = list(start_of_weeks_with_weekday.keys())[0]
 
             start_end, options_as_dates = utils.get_required_rows(dict_ship_config, filtered_df, filter_boolean)
 
