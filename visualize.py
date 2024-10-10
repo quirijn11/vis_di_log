@@ -22,9 +22,10 @@ def show_week_hours(df, ship, start, ship_config):
     waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
     terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
     contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+    rest_time = round(filtered_df[filtered_df['Start'] == start]['Rusttijd_week'], 1)
     container = st.container(border=True)
     if len(ship_config) > 1:
-        col1, col2, col3, col4, col5 = container.columns(5)
+        col1, col2, col3, col4, col5, col6 = container.columns(6)
         col1.markdown(f"""
             <div style="display: flex; justify-content: center; align-items: center; height: 85px;">
                 <div>
@@ -36,16 +37,18 @@ def show_week_hours(df, ship, start, ship_config):
         col3.metric("Waiting hours", waiting_time)
         col4.metric("(Un)load hours", terminal_time)
         col5.metric("Total hours", contract_time, round(contract_time - ship_config[ship], 1))
+        col6.metric("Rest hours", rest_time)
     else:
-        col1, col2, col3, col4 = container.columns(4)
+        col1, col2, col3, col4, col5 = container.columns(5)
         col1.metric("Sailing hours", sailing_time)
         col2.metric("Waiting hours", waiting_time)
         col3.metric("(Un)load hours", terminal_time)
         col4.metric("Total hours", contract_time, round(contract_time - ship_config[ship], 1))
+        col5.metric("Rest hours", rest_time)
 
 
 def show_week_hours_as_df(df, start, ship_config):
-    columns = ['Ship', 'Sailing hours', 'Waiting hours', '(Un)load hours', 'Total hours']
+    columns = ['Ship', 'Sailing hours', 'Waiting hours', '(Un)load hours', 'Total hours', 'Rest hours']
     df_to_show = pd.DataFrame(columns=columns)
     for ship in ship_config:
         filtered_df = df[df['Schip'] == ship]
@@ -54,8 +57,9 @@ def show_week_hours_as_df(df, start, ship_config):
             waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
             terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
             contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+            rest_time = round(filtered_df[filtered_df['Start'] == start]['Rusttijd_week'], 1)
             new_row = {'Ship': ship, 'Sailing hours': sailing_time, 'Waiting hours': waiting_time,
-                       '(Un)load hours': terminal_time, 'Total hours': contract_time}
+                       '(Un)load hours': terminal_time, 'Total hours': contract_time, 'Rest hours': rest_time}
             entry = pd.DataFrame.from_dict(new_row)
             df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
 

@@ -81,6 +81,7 @@ def split_dataframe_into_weeks(df, day='Saturday'):
         split_df['Vaaruren_week'] = sum(split_df['Vaaruren']) / 60
         split_df['Wachttijd_week'] = sum(split_df['Wachttijd']) / 60
         split_df['Laad/Lostijd_week'] = sum(split_df['Laad/Lostijd']) / 60
+        split_df['Rusttijd_week'] = sum(split_df['Rusttijd']) / 60
         split_df['Tijd onder contract'] = (sum(split_df['Vaaruren']) + sum(split_df['Wachttijd'])
                                            + sum(split_df['Laad/Lostijd'])) / 60
 
