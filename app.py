@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import streamlit as st
 import streamlit_authenticator as stauth
@@ -118,13 +118,20 @@ if st.session_state["authentication_status"]:
             converted_selection = start_of_weeks_with_weekday[selection]
             start = options_as_dates[converted_selection]
             end = start_end[start][0]
-            visualize.write_week_info(start, start_of_week, end)
 
-            if len(dict_ship_config) <= 1:
-                for ship in dict_ship_config:
-                    visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
-            else:
-                visualize.show_week_hours_as_df(filtered_df, start, dict_ship_config)
+            tab1, tab2 = st.tabs(["Week overview", "Total overview"])
+            with tab1:
+                visualize.write_week_info(start, start_of_week, end)
+                if len(dict_ship_config) <= 1:
+                    for ship in dict_ship_config:
+                        visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+                else:
+                    visualize.show_week_hours_as_df(filtered_df, start, dict_ship_config, start_of_week)
+            with tab2:
+                start_of_weeks = []
+                for key in start_of_weeks_with_weekday:
+                    start_of_weeks.append(start_of_weeks_with_weekday[key])
+                visualize.show_period_hours_as_df(filtered_df, dict_ship_config, start_of_week)
 
             tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
             with tab1:
@@ -164,8 +171,16 @@ if st.session_state["authentication_status"]:
                             end = el['End']
             end_next_day = (end + timedelta(seconds=1)).date()
 
-            st.write("The selected week is for ship", ship, "and is from", str(start.date().strftime('%d-%m-%Y')), " to ", str(end_next_day.strftime('%d-%m-%Y')), ".")
-            visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+            tab1, tab2 = st.tabs(["Week overview", "Total overview"])
+            with tab1:
+                st.write("The selected week is for ship", ship, "and is from", str(start.date().strftime('%d-%m-%Y')), " to ", str(end_next_day.strftime('%d-%m-%Y')), ".")
+                visualize.show_week_hours(filtered_df, ship, start, dict_ship_config)
+            with tab2:
+                start_of_weeks = []
+                for key in start_of_weeks_with_weekday:
+                    start_of_weeks.append(start_of_weeks_with_weekday[key])
+                visualize.show_period_hours_as_df(filtered_df, dict_ship_config, start_of_week)
+
             tab1, tab2, tab3 = st.tabs(["Timeline", "Activity Time Per Day", "Average Activity Time"])
             with tab1:
                 st.plotly_chart(

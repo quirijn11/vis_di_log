@@ -54,30 +54,40 @@ def update_van_tot(row):
 
 # Function to split the DataFrame into weeks
 def split_dataframe_into_weeks(df, day='Saturday'):
-    # Create a list to hold the indices where a new week starts
-    week_start_indices = [0]
+    # Split the DataFrame into a dictionary of DataFrames based on unique values in 'Ship'
+    grouped_dfs = {ship: group for ship, group in df.groupby('Schip')}
 
     # Loop through the DataFrame to find where a new week starts
     weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     if isinstance(day, int):
         day = weekdays[day]
-    for i in range(len(df) - 1):
-        ind = weekdays.index(df.loc[i, 'Start_Weekday'])
-        ind_next = weekdays.index(df.loc[i + 1, 'Start_Weekday'])
-        if (ind_next >= weekdays.index(day)
-                and ((ind_next > ind and ind < weekdays.index(day)) or (ind_next < ind and ind > weekdays.index(day)))):
-            week_start_indices.append(i + 1)
+    ship_week_start_indices = {}
+    for ship in grouped_dfs:
+        # Create a list to hold the indices where a new week starts
+        week_start_indices = [0]
+        grouped_df = grouped_dfs[ship]
+        for i in range(len(grouped_df) - 1):
+            ind = weekdays.index(grouped_df.iloc[i]['Start_Weekday'])
+            ind_next = weekdays.index(grouped_df.iloc[i + 1]['Start_Weekday'])
+            if (ind_next >= weekdays.index(day)
+                    and ((ind_next > ind and ind < weekdays.index(day)) or (ind_next < ind and ind > weekdays.index(day)))):
+                week_start_indices.append(i + 1)
 
-    week_start_indices.append(len(df))
+        week_start_indices.append(len(grouped_df))
+        ship_week_start_indices[ship] = week_start_indices
 
     # Create a list to hold the split DataFrames
     split_dfs = []
 
     # Split the DataFrame using the identified start indices
-    for start, end in zip(week_start_indices[:-1], week_start_indices[1:]):
-        split_dfs.append(df.iloc[start:end])
+    for ship in grouped_dfs:
+        grouped_df = grouped_dfs[ship]
+        for start, end in zip(ship_week_start_indices[ship][:-1], ship_week_start_indices[ship][1:]):
+            split_dfs.append(grouped_df.iloc[start:end])
 
     for split_df in split_dfs:
+        split_df['Snelheid'] = split_df['Snelheid'].str.replace('km/u', '').astype(float).round(1)
+        split_df['Snelheid_week_gem'] = split_df['Snelheid'].mean()
         split_df['Vaaruren_week'] = sum(split_df['Vaaruren']) / 60
         split_df['Wachttijd_week'] = sum(split_df['Wachttijd']) / 60
         split_df['Laad/Lostijd_week'] = sum(split_df['Laad/Lostijd']) / 60
@@ -205,3 +215,40 @@ def split_rows_on_day_change(df):
     new_df = pd.DataFrame(new_rows)
 
     return new_df
+
+
+# Generic function to get week number with a custom start of the week
+def week_number_custom_start(dt, start_weekday):
+    """
+    Get the week number with a custom start day of the week.
+
+    Parameters:
+    dt (datetime): The input date.
+    start_weekday (int): The start of the week (0 = Monday, 6 = Sunday).
+
+    Returns:
+    str: The week number as a string.
+    """
+
+    dt = pd.to_datetime(dt)
+    start_weekday = weekday_string_to_int(start_weekday)
+
+    # Adjust the date based on the custom start weekday
+    shift_days = (dt.weekday() - start_weekday + 7) % 7
+    adjusted_date = dt - pd.Timedelta(days=shift_days)
+
+    # Return the week number with Sunday as the start (after adjustment)
+    return adjusted_date.strftime('%U')
+
+def weekday_string_to_int(weekday_str):
+    # Mapping of weekday strings to integers
+    weekday_map = {
+        'Monday': 0,
+        'Tuesday': 1,
+        'Wednesday': 2,
+        'Thursday': 3,
+        'Friday': 4,
+        'Saturday': 5,
+        'Sunday': 6
+    }
+    return weekday_map.get(weekday_str)
