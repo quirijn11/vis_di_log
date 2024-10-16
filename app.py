@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime
+from datetime import timedelta
 
 import streamlit as st
 import streamlit_authenticator as stauth
@@ -6,7 +6,6 @@ import yaml
 from yaml.loader import SafeLoader
 import visualize
 import utils
-import pandas as pd
 
 st.set_page_config(layout="wide")
 

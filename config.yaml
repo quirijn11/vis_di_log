@@ -22,6 +22,12 @@ credentials:
       logged_in: false
       name: Iwan Maessen
       password: $2b$12$rt612L.hvdr0SrMVd8e/Hu2P1UJgaVDAYkwwPoBKchcC0VQU6iwiO
+    jroc:
+      email: john@roc.nl
+      failed_login_attempts: 0
+      logged_in: false
+      name: John ROC Waalwijk
+      password: $2b$12$B1ii3n0LDy5gxy6Sk4xS7eeXUgBbuEXPmS16l5hKykL2mphXN/TGu
 preauthorized:
   emails:
   #- melsby@gmail.com
