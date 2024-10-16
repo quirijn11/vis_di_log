@@ -4,6 +4,7 @@ import pandas as pd
 import utils
 from datetime import timedelta
 
+
 def write_week_info(start, start_of_week, end):
     weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     end_next_day = (end + timedelta(seconds=1)).date()
@@ -47,19 +48,58 @@ def show_week_hours(df, ship, start, ship_config):
         col5.metric("Rest hours", rest_time)
 
 
-def show_week_hours_as_df(df, start, ship_config):
-    columns = ['Ship', 'Sailing hours', 'Waiting hours', '(Un)load hours', 'Total hours', 'Rest hours']
+def show_week_hours_as_df(df, start, ship_config, start_of_week):
+    columns = ['Week', 'Ship', 'Sailing hours', 'Speed (avg.)', '(Un)load hours', 'Waiting hours', 'Working hours',
+               'Contract hours', 'Rest hours']
+
     df_to_show = pd.DataFrame(columns=columns)
     for ship in ship_config:
         filtered_df = df[df['Schip'] == ship]
         if start.date() in filtered_df['Start_Date'].values:
+            week = utils.week_number_custom_start(start, start_of_week)
             sailing_time = round(filtered_df[filtered_df['Start'] == start]['Vaaruren_week'], 1)
+            speed = round(filtered_df[filtered_df['Start'] == start]['Snelheid_week_gem'], 1)
             waiting_time = round(filtered_df[filtered_df['Start'] == start]['Wachttijd_week'], 1)
             terminal_time = round(filtered_df[filtered_df['Start'] == start]['Laad/Lostijd_week'], 1)
-            contract_time = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+            working_hours = round(filtered_df[filtered_df['Start'] == start]['Tijd onder contract'].values[0], 1)
+            contract_hours = ship_config[ship]
             rest_time = round(filtered_df[filtered_df['Start'] == start]['Rusttijd_week'], 1)
-            new_row = {'Ship': ship, 'Sailing hours': sailing_time, 'Waiting hours': waiting_time,
-                       '(Un)load hours': terminal_time, 'Total hours': contract_time, 'Rest hours': rest_time}
+            new_row = {'Week': week, 'Ship': ship, 'Sailing hours': sailing_time, 'Speed (avg.)': speed,
+                       '(Un)load hours': terminal_time, 'Waiting hours': waiting_time, 'Working hours': working_hours,
+                       'Contract hours': contract_hours, 'Rest hours': rest_time}
+            entry = pd.DataFrame.from_dict(new_row)
+            df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
+
+    # Set display format for floats
+    pd.options.display.float_format = '{:.1f}'.format  # Adjust the number of decimal places as needed
+
+    # Apply the style only to the 'Total hours' column based on the corresponding Threshold
+    styled_df = df_to_show.style.apply(lambda row: highlight_rows(row, ship_config, df_to_show.columns), axis=1)
+
+    # Display the styled DataFrame in Streamlit
+    st.dataframe(styled_df, width=1400)
+
+
+def show_period_hours_as_df(df, ship_config, start_of_week):
+    columns = ['Week', 'Ship', 'Sailing hours', 'Speed (avg.)', '(Un)load hours', 'Waiting hours', 'Working hours',
+               'Contract hours', 'Rest hours']
+    df_to_show = pd.DataFrame(columns=columns)
+    for ship in ship_config:
+        filtered_df = df[df['Schip'] == ship]
+        unique_values = filtered_df['Tijd onder contract'].unique()
+        for unique_value in unique_values:
+            row = filtered_df[filtered_df['Tijd onder contract'] == unique_value].head(1)
+            week = utils.week_number_custom_start(row['Start'].values[0], start_of_week)
+            sailing_time = round(row['Vaaruren_week'].values[0], 1)
+            speed = round(row['Snelheid_week_gem'].values[0], 1)
+            waiting_time = round(row['Wachttijd_week'].values[0], 1)
+            terminal_time = round(row['Laad/Lostijd_week'].values[0], 1)
+            working_hours = round(row['Tijd onder contract'].values[0], 1)
+            contract_hours = ship_config[ship]
+            rest_time = round(row['Rusttijd_week'].values[0], 1)
+            new_row = {'Week': [week], 'Ship': [ship], 'Sailing hours': [sailing_time], 'Speed (avg.)': [speed],
+                       '(Un)load hours': [terminal_time], 'Waiting hours': [waiting_time],
+                       'Working hours': [working_hours], 'Contract hours': [contract_hours], 'Rest hours': [rest_time]}
             entry = pd.DataFrame.from_dict(new_row)
             df_to_show = pd.concat([df_to_show, entry], ignore_index=True)
 
@@ -81,11 +121,11 @@ def highlight_total_hours(total_hours, threshold):
 # Create a function to apply styles only to the "Total hours" column
 def highlight_rows(row, ship_config, columns):
     styles = [''] * len(row)  # Create a list with the same length as the row, initialized with empty strings
-    total_hours = row['Total hours']
+    total_hours = row['Working hours']
     ship_name = row['Ship']
 
     # Highlight only the 'Total hours' cell
-    total_hours_index = columns.get_loc('Total hours')
+    total_hours_index = columns.get_loc('Working hours')
     styles[total_hours_index] = highlight_total_hours(total_hours, ship_config[ship_name])
 
     return styles
